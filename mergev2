@@ -1,0 +1,42 @@
+import numpy as np
+from datetime import timedelta
+
+if len(return_inward_data) > 0:
+    # Step 1: Generate all possible dates for each entry in return_inward_data
+    all_dates = return_inward_data.apply(
+        lambda row: pd.date_range(row['DATE_BSD'], periods=relaxation_days + 1).to_list(), axis=1
+    )
+
+    # Flatten the list of dates for faster matching
+    all_dates_set = set(date for dates in all_dates for date in dates)
+
+    # Filter df for matching dates
+    df_filtered = df[df['DATE_BSD'].isin(all_dates_set)]
+
+    # Step 2: Create amount ranges
+    return_inward_data['LOWER_AMT'] = return_inward_data['AMOUNT_MOD']
+    return_inward_data['UPPER_AMT'] = return_inward_data['AMOUNT_MOD'] + net_charges
+
+    # Step 3: Merge return_inward_data with filtered df
+    merged = df_filtered.merge(
+        return_inward_data[['ACCOUNT_NO', 'LOWER_AMT', 'UPPER_AMT']],
+        on='ACCOUNT_NO',
+        how='inner'
+    )
+
+    # Step 4: Apply conditions to filter matching rows
+    matched = merged[
+        (merged['AMOUNT_MOD'] >= merged['LOWER_AMT']) &
+        (merged['AMOUNT_MOD'] < merged['UPPER_AMT']) &
+        (merged['DEBIT_CREDIT'] == 'D')
+    ]
+
+    # Step 5: Extract non-trade inward indices
+    non_trade_inward_index = matched['ROW_INDEX'].unique()
+
+    # Step 6: Update the DataFrame conditionally
+    if len(non_trade_inward_index) == 0:
+        df['chq_ret_inw'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 8, df['chq_ret_inw'])
+    else:
+        df['chq_inw_sys'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 1, df['chq_inw_sys'])
+        df.loc[df['chq_inw_sys'] == 1, 'chq_ret_out'] = 0
