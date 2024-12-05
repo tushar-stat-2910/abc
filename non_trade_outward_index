@@ -1,0 +1,36 @@
+def par2_v2(temp_dates, amt_range, account_no, df_filtered):
+    """
+    Filters the DataFrame for matching conditions and returns ROW_INDEX values.
+
+    Parameters:
+    temp_dates (list): List of dates for filtering.
+    amt_range (tuple): Lower and upper bounds for amount filtering.
+    account_no (str): Account number to filter.
+    df_filtered (DataFrame): Pre-filtered DataFrame with relevant rows.
+
+    Returns:
+    list: List of ROW_INDEX values that meet the conditions.
+    """
+    # Apply conditions using vectorized filtering
+    result = df_filtered[
+        (df_filtered['DATE_BSO'].isin(temp_dates)) &
+        (df_filtered['AMOUNT_MOD'] >= amt_range[0]) &
+        (df_filtered['AMOUNT_MOD'] < amt_range[1]) &
+        (df_filtered['ACCOUNT_NO'] == account_no) &
+        (df_filtered['DEBIT_CREDIT'] == 'C')
+    ]
+    return result['ROW_INDEX'].tolist()
+
+
+non_trade_outward_index = Parallel(n_jobs=multiprocessing.cpu_count() - 1)(
+    delayed(par2_v2)(
+        temp_dates=all_dates[i],
+        amt_range=(amt_range['LOWER'][i], amt_range['UPPER'][i]),
+        account_no=return_outward_data['ACCOUNT_NO'][i],
+        df_filtered=df_filtered
+    )
+    for i in range(len(return_outward_data))
+)
+
+# Flatten the list of results
+non_trade_outward_index = [item for sublist in non_trade_outward_index for item in sublist]
