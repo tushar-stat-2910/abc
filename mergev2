@@ -9,9 +9,11 @@ if len(return_inward_data) > 0:
 
     # Flatten the list of dates for faster matching
     all_dates_set = set(date for dates in all_dates for date in dates)
+    print(f"All Dates Set: {len(all_dates_set)} entries")  # Debug
 
     # Filter df for matching dates
     df_filtered = df[df['DATE_BSD'].isin(all_dates_set)]
+    print(f"Filtered df size: {df_filtered.shape}")  # Debug
 
     # Step 2: Create amount ranges
     return_inward_data['LOWER_AMT'] = return_inward_data['AMOUNT_MOD']
@@ -23,6 +25,7 @@ if len(return_inward_data) > 0:
         on='ACCOUNT_NO',
         how='inner'
     )
+    print(f"Merged df size: {merged.shape}")  # Debug
 
     # Step 4: Apply conditions to filter matching rows
     matched = merged[
@@ -30,13 +33,18 @@ if len(return_inward_data) > 0:
         (merged['AMOUNT_MOD'] < merged['UPPER_AMT']) &
         (merged['DEBIT_CREDIT'] == 'D')
     ]
+    print(f"Matched rows: {matched.shape[0]}")  # Debug
 
     # Step 5: Extract non-trade inward indices
     non_trade_inward_index = matched['ROW_INDEX'].unique()
+    print(f"Non-Trade Inward Index Count: {len(non_trade_inward_index)}")  # Debug
 
     # Step 6: Update the DataFrame conditionally
     if len(non_trade_inward_index) == 0:
         df['chq_ret_inw'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 8, df['chq_ret_inw'])
     else:
         df['chq_inw_sys'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 1, df['chq_inw_sys'])
+        print(f"Updated chq_inw_sys column with 1s for {len(non_trade_inward_index)} rows")  # Debug
+
         df.loc[df['chq_inw_sys'] == 1, 'chq_ret_out'] = 0
+        print(f"Updated chq_ret_out column")  # Debug
