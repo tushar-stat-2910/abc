@@ -1,0 +1,41 @@
+# Generate all possible dates based on relaxation_days
+date_ranges = return_inward_data.apply(
+    lambda row: pd.date_range(row['DATE_BSD'], periods=relaxation_days + 1).to_list(), axis=1
+)
+
+# Flatten the list of dates for efficient matching
+all_dates = set(date for dates in date_ranges for date in dates)
+
+# Filter the DataFrame for matching dates
+df_filtered = df[df['DATE_BSD'].isin(all_dates)]
+
+# Calculate amount ranges
+amt_range = return_inward_data[['AMOUNT_MOD']].assign(
+    LOWER=lambda x: x['AMOUNT_MOD'], UPPER=lambda x: x['AMOUNT_MOD'] + net_charges
+)
+
+# Merge DataFrames to avoid manual looping
+merged = df_filtered.merge(
+    return_inward_data[['ACCOUNT_NO', 'AMOUNT_MOD']].assign(
+        LOWER=amt_range['LOWER'], UPPER=amt_range['UPPER']
+    ),
+    on='ACCOUNT_NO',
+    how='inner'
+)
+
+# Apply conditions directly
+merged = merged[
+    (merged['AMOUNT_MOD'] >= merged['LOWER']) &
+    (merged['AMOUNT_MOD'] < merged['UPPER']) &
+    (merged['DEBIT_CREDIT'] == 'D')
+]
+
+# Get the ROW_INDEX for non-trade inward matches
+non_trade_inward_index = merged['ROW_INDEX'].unique()
+
+# Update columns using np.where for efficiency
+df['chq_ret_inw'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 8, df['chq_ret_inw'])
+df['chq_inw_sys'] = np.where(df['ROW_INDEX'].isin(non_trade_inward_index), 1, df['chq_inw_sys'])
+
+# Update chq_ret_out based on the condition
+df.loc[df['chq_inw_sys'] == 1, 'chq_ret_out'] = 0
